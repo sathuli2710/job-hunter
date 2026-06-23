@@ -1,0 +1,41 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum JobStatus {
+  DISCOVERED
+  REACHED_OUT_FOR_REFERRAL
+  APPLIED
+  GOT_HR_CALL
+  INTERVIEWING
+  REJECTED
+  SELECTED
+  OFFER_ACCEPTED
+}
+
+model Company {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  jobs      Job[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Job {
+  id             String    @id @default(uuid())
+  jobLink        String
+  companyId      String
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  status         JobStatus @default(DISCOVERED)
+  refereeContact String?
+  refereeType    String?   // 'EMAIL', 'PHONE', 'LINKEDIN', 'LINK', 'TEXT'
+  statusHistory  Json?     // Array of { status: JobStatus, timestamp: string }
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([companyId])
+}
