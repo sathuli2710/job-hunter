@@ -146,6 +146,10 @@ export default function AddJobModal({ isOpen, onClose, onSave, editingJob }: Add
     if (/linkedin\.com/i.test(trimmed)) {
       return 'Classified as LinkedIn profile';
     }
+    // Explicit protocol check first — https:// or http:// is always a link
+    if (/^https?:\/\//i.test(trimmed)) {
+      return 'Classified as Web Link';
+    }
     if (/^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)$/.test(trimmed)) {
       return 'Classified as Web Link';
     }

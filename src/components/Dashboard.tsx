@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Search, Filter, RefreshCw, BarChart2, List, Grid, SlidersHorizontal, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Filter, RefreshCw, BarChart2, List, Grid, SlidersHorizontal, AlertTriangle, LogOut } from 'lucide-react';
 import StatsSection from './StatsSection';
 import JobCard from './JobCard';
 import AddJobModal from './AddJobModal';
+import { useAuth } from '@/context/AuthContext';
 
 interface Job {
   id: string;
@@ -21,6 +22,7 @@ interface Job {
 
 
 export default function Dashboard() {
+  const { user, logout } = useAuth();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,12 @@ export default function Dashboard() {
       params.append('order', sortOrder);
       if (searchQuery.trim()) params.append('q', searchQuery.trim());
 
-      const res = await fetch(`/api/jobs?${params.toString()}`);
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/jobs?${params.toString()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) {
         const errorText = await res.text();
         if (!errorText || res.status === 502 || res.status === 504) {
@@ -83,7 +90,12 @@ export default function Dashboard() {
   // Fetch stats
   const fetchStats = async () => {
     try {
-      const res = await fetch('/api/stats');
+      const token = await user?.getIdToken();
+      const res = await fetch('/api/stats', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -124,9 +136,13 @@ export default function Dashboard() {
     const url = editingJob ? `/api/jobs/${editingJob.id}` : '/api/jobs';
     const method = editingJob ? 'PATCH' : 'POST';
 
+    const token = await user?.getIdToken();
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify(jobData)
     });
 
@@ -147,9 +163,13 @@ export default function Dashboard() {
   // Quick Status change directly from the Card dropdown
   const handleStatusChange = async (id: string, newStatus: string) => {
     try {
+      const token = await user?.getIdToken();
       const res = await fetch(`/api/jobs/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ status: newStatus })
       });
 
@@ -165,7 +185,13 @@ export default function Dashboard() {
   // Delete Job
   const handleDeleteJob = async (id: string) => {
     try {
-      const res = await fetch(`/api/jobs/${id}`, { method: 'DELETE' });
+      const token = await user?.getIdToken();
+      const res = await fetch(`/api/jobs/${id}`, { 
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       if (!res.ok) throw new Error('Delete failed');
       
       showNotification('Application deleted successfully');
@@ -274,26 +300,63 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Action Button Group */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => loadData()}
-            className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Refresh Data"
-          >
-            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-          </button>
-          
+        {/* Right-side controls */}
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3">
+
+          {/* Row 1 on mobile: User profile chip + Refresh */}
+          <div className="flex items-center justify-between md:justify-end gap-2">
+            {user && (
+              <div className="flex items-center gap-2.5 bg-slate-900 border border-slate-800/80 p-2 rounded-xl text-slate-300 animate-fadeIn">
+                {user.photoURL ? (
+                  <img 
+                    src={user.photoURL} 
+                    alt={user.displayName || 'User Profile'} 
+                    referrerPolicy="no-referrer"
+                    className="w-7 h-7 rounded-full border border-slate-700 shrink-0"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-indigo-950 border border-indigo-900/60 text-indigo-400 flex items-center justify-center text-[10px] font-black uppercase shrink-0">
+                    {user.email ? user.email.charAt(0) : 'U'}
+                  </div>
+                )}
+                <div className="flex flex-col text-left">
+                  <span className="text-[10px] text-slate-500 font-semibold tracking-wider uppercase leading-none">Logged In</span>
+                  <span className="text-xs font-semibold text-slate-300 max-w-[80px] sm:max-w-[140px] truncate leading-tight mt-0.5" title={user.email || ''}>
+                    {user.displayName || user.email?.split('@')[0]}
+                  </span>
+                </div>
+                
+                <button
+                  onClick={() => logout()}
+                  className="ml-1.5 p-1 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-950/20 transition-all cursor-pointer"
+                  title="Log Out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={() => loadData()}
+              className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors"
+              title="Refresh Data"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            </button>
+          </div>
+
+          {/* Row 2 on mobile: Add Job Link (full width) */}
           <button
             onClick={() => {
               setEditingJob(null);
               setIsAddOpen(true);
             }}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-950/30 transition-all duration-200 cursor-pointer"
+            className="w-full md:w-auto flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-lg shadow-indigo-950/30 transition-all duration-200 cursor-pointer"
           >
             <Plus size={16} />
             <span>Add Job Link</span>
           </button>
+
         </div>
       </div>
 

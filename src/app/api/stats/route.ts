@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
+import { verifyAuth } from '@/lib/auth';
 
-// GET: Compile and return analytical dashboard stats
-export async function GET() {
+// GET: Compile and return analytical dashboard stats (scoped to user)
+export async function GET(req: Request) {
   try {
+    const uid = await verifyAuth(req);
+    if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const jobs = await prisma.job.findMany({
+      where: { userId: uid },
       include: { company: true }
     });
 

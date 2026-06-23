@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { JobStatus } from '@prisma/client';
+import { verifyAuth } from '@/lib/auth';
 
 function classifyReferee(contact: string): 'EMAIL' | 'PHONE' | 'LINKEDIN' | 'LINK' | 'TEXT' {
   if (!contact) return 'TEXT';
@@ -32,9 +33,14 @@ function classifyReferee(contact: string): 'EMAIL' | 'PHONE' | 'LINKEDIN' | 'LIN
   return 'TEXT';
 }
 
-// GET: Retrieve job listings with filter and sort options
+// GET: Retrieve job listings with filter and sort options (scoped to authenticated user)
 export async function GET(req: NextRequest) {
   try {
+    const uid = await verifyAuth(req);
+    if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { searchParams } = req.nextUrl;
     const status = searchParams.get('status');
     const sortBy = searchParams.get('sortBy') || 'createdAt';
@@ -54,21 +60,24 @@ export async function GET(req: NextRequest) {
           FROM "Job" j
           JOIN "Company" c ON j."companyId" = c.id
           WHERE 
-            (similarity(c.name, $1) > 0.15)
-            OR (similarity(j."jobLink", $1) > 0.05)
-            OR (similarity(j."refereeContact", $1) > 0.15)
-            OR (c.name ILIKE $2)
-            OR (j."jobLink" ILIKE $2)
-            OR (j."refereeContact" ILIKE $2)
+            j."userId" = $3 AND (
+              (similarity(c.name, $1) > 0.15)
+              OR (similarity(j."jobLink", $1) > 0.05)
+              OR (similarity(j."refereeContact", $1) > 0.15)
+              OR (c.name ILIKE $2)
+              OR (j."jobLink" ILIKE $2)
+              OR (j."refereeContact" ILIKE $2)
+            )
           ORDER BY 
             similarity(c.name, $1) DESC, 
             similarity(j."jobLink", $1) DESC,
             j."${sortField}" ${sortOrder.toUpperCase()}
-        `, searchTerm, `%${searchTerm}%`);
+        `, searchTerm, `%${searchTerm}%`, uid);
       } catch (err) {
         // Fallback to standard ILIKE search in Prisma Client
         const jobsRaw = await prisma.job.findMany({
           where: {
+            userId: uid,
             OR: [
               { jobLink: { contains: searchTerm, mode: 'insensitive' } },
               { refereeContact: { contains: searchTerm, mode: 'insensitive' } },
@@ -96,7 +105,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(jobs);
     }
 
-    const filter: any = {};
+    const filter: any = {
+      userId: uid
+    };
     if (status && status !== 'ALL') {
       filter.status = status as JobStatus;
     }
@@ -126,6 +137,11 @@ export async function GET(req: NextRequest) {
 // POST: Add a new job listing
 export async function POST(req: Request) {
   try {
+    const uid = await verifyAuth(req);
+    if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { jobLink, companyName, refereeContact, status } = await req.json();
 
     if (!jobLink || !companyName) {
@@ -157,7 +173,8 @@ export async function POST(req: Request) {
         refereeType: refType,
         statusHistory: [
           { status: initialStatus, timestamp: new Date().toISOString() }
-        ]
+        ],
+        userId: uid
       },
       include: {
         company: true

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { JobStatus } from '@prisma/client';
+import { verifyAuth } from '@/lib/auth';
 
 function classifyReferee(contact: string): 'EMAIL' | 'PHONE' | 'LINKEDIN' | 'LINK' | 'TEXT' {
   if (!contact) return 'TEXT';
@@ -32,12 +33,17 @@ function classifyReferee(contact: string): 'EMAIL' | 'PHONE' | 'LINKEDIN' | 'LIN
   return 'TEXT';
 }
 
-// PATCH: Update job application details or status
+// PATCH: Update job application details or status (scoped to owner)
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const uid = await verifyAuth(req);
+    if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
     const { jobLink, companyName, refereeContact, status } = await req.json();
 
@@ -47,6 +53,11 @@ export async function PATCH(
     });
 
     if (!existingJob) {
+      return NextResponse.json({ error: 'Job application not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    if (existingJob.userId !== uid) {
       return NextResponse.json({ error: 'Job application not found' }, { status: 404 });
     }
 
@@ -108,13 +119,31 @@ export async function PATCH(
   }
 }
 
-// DELETE: Remove job application
+// DELETE: Remove job application (scoped to owner)
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const uid = await verifyAuth(req);
+    if (!uid) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
+
+    const existingJob = await prisma.job.findUnique({
+      where: { id }
+    });
+
+    if (!existingJob) {
+      return NextResponse.json({ error: 'Job application not found' }, { status: 404 });
+    }
+
+    // Verify ownership
+    if (existingJob.userId !== uid) {
+      return NextResponse.json({ error: 'Job application not found' }, { status: 404 });
+    }
     
     await prisma.job.delete({
       where: { id }
