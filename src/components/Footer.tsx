@@ -26,7 +26,7 @@ export default function Footer() {
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-medium bg-slate-900/40 border border-slate-800/60 rounded-full px-4 py-1.5 shadow-inner">
             <span>Built with</span>
             <Heart size={11} className="text-rose-500 fill-rose-500 animate-pulse" />
-            <span>for developers navigating the pipeline.</span>
+            <span>job hunters. Happy hunting!!!</span>
           </div>
 
           {/* Right section: Links */}
